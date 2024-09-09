@@ -42,7 +42,9 @@ class Renderer: NSObject, MTKViewDelegate {
     var rotation: Float = 0
 
     var mesh: MTKMesh
-
+    
+    var frameCounter = 0
+    
     init?(metalKitView: MTKView) {
         self.device = metalKitView.device!
         self.commandQueue = self.device.makeCommandQueue()!
@@ -59,6 +61,7 @@ class Renderer: NSObject, MTKViewDelegate {
         metalKitView.depthStencilPixelFormat = MTLPixelFormat.depth32Float_stencil8
         metalKitView.colorPixelFormat = MTLPixelFormat.bgra8Unorm_srgb
         metalKitView.sampleCount = 1
+        metalKitView.preferredFramesPerSecond = 60
 
         let mtlVertexDescriptor = Renderer.buildMetalVertexDescriptor()
 
@@ -225,58 +228,80 @@ class Renderer: NSObject, MTKViewDelegate {
             
             /// Delay getting the currentRenderPassDescriptor until we absolutely need it to avoid
             ///   holding onto the drawable and blocking the display pipeline any longer than necessary
-            let renderPassDescriptor = view.currentRenderPassDescriptor
+//            let renderPassDescriptor = view.currentRenderPassDescriptor
             
-            if let renderPassDescriptor = renderPassDescriptor {
-                
-                /// Final pass rendering code here
-                if let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor) {
-                    renderEncoder.label = "Primary Render Encoder"
-                    
-                    renderEncoder.pushDebugGroup("Draw Box")
-                    
-                    renderEncoder.setCullMode(.back)
-                    
-                    renderEncoder.setFrontFacing(.counterClockwise)
-                    
-                    renderEncoder.setRenderPipelineState(pipelineState)
-                    
-                    renderEncoder.setDepthStencilState(depthState)
-                    
-                    renderEncoder.setVertexBuffer(dynamicUniformBuffer, offset:uniformBufferOffset, index: BufferIndex.uniforms.rawValue)
-                    renderEncoder.setFragmentBuffer(dynamicUniformBuffer, offset:uniformBufferOffset, index: BufferIndex.uniforms.rawValue)
-                    
-                    for (index, element) in mesh.vertexDescriptor.layouts.enumerated() {
-                        guard let layout = element as? MDLVertexBufferLayout else {
-                            return
-                        }
-                        
-                        if layout.stride != 0 {
-                            let buffer = mesh.vertexBuffers[index]
-                            renderEncoder.setVertexBuffer(buffer.buffer, offset:buffer.offset, index: index)
-                        }
-                    }
-                    
-                    renderEncoder.setFragmentTexture(colorMap, index: TextureIndex.color.rawValue)
-                    
-                    for submesh in mesh.submeshes {
-                        renderEncoder.drawIndexedPrimitives(type: submesh.primitiveType,
-                                                            indexCount: submesh.indexCount,
-                                                            indexType: submesh.indexType,
-                                                            indexBuffer: submesh.indexBuffer.buffer,
-                                                            indexBufferOffset: submesh.indexBuffer.offset)
-                        
-                    }
-                    
-                    renderEncoder.popDebugGroup()
-                    
-                    renderEncoder.endEncoding()
-                    
-                    if let drawable = view.currentDrawable {
-                        commandBuffer.present(drawable)
-                    }
-                }
+            //Retrieve render pass descriptor and change the background color
+            let renderPassDescriptor = view.currentRenderPassDescriptor!
+            
+            if (frameCounter % 2 == 0) {
+                renderPassDescriptor.colorAttachments[0].clearColor = MTLClearColor(red: 1.0, green: 0.0, blue: 0.0, alpha: 1.0)
+            } else {
+                renderPassDescriptor.colorAttachments[0].clearColor = MTLClearColor(red: 0.0, green: 0.0, blue: 1.0, alpha: 1.0)
             }
+            frameCounter += 1
+            
+            //Create render command encoder
+            let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor)!
+            
+            //End encoding
+            renderEncoder.endEncoding()
+            
+            //Retrieve drawable and present it to the screen
+            let drawable = view.currentDrawable!
+            commandBuffer.present(drawable)
+            
+            
+            
+//            if let renderPassDescriptor = renderPassDescriptor {
+//                
+//                /// Final pass rendering code here
+//                if let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor) {
+//                    renderEncoder.label = "Primary Render Encoder"
+//                    
+//                    renderEncoder.pushDebugGroup("Draw Box")
+//                    
+//                    renderEncoder.setCullMode(.back)
+//                    
+//                    renderEncoder.setFrontFacing(.counterClockwise)
+//                    
+//                    renderEncoder.setRenderPipelineState(pipelineState)
+//                    
+//                    renderEncoder.setDepthStencilState(depthState)
+//                    
+//                    renderEncoder.setVertexBuffer(dynamicUniformBuffer, offset:uniformBufferOffset, index: BufferIndex.uniforms.rawValue)
+//                    renderEncoder.setFragmentBuffer(dynamicUniformBuffer, offset:uniformBufferOffset, index: BufferIndex.uniforms.rawValue)
+//                    
+//                    for (index, element) in mesh.vertexDescriptor.layouts.enumerated() {
+//                        guard let layout = element as? MDLVertexBufferLayout else {
+//                            return
+//                        }
+//                        
+//                        if layout.stride != 0 {
+//                            let buffer = mesh.vertexBuffers[index]
+//                            renderEncoder.setVertexBuffer(buffer.buffer, offset:buffer.offset, index: index)
+//                        }
+//                    }
+//                    
+//                    renderEncoder.setFragmentTexture(colorMap, index: TextureIndex.color.rawValue)
+//                    
+//                    for submesh in mesh.submeshes {
+//                        renderEncoder.drawIndexedPrimitives(type: submesh.primitiveType,
+//                                                            indexCount: submesh.indexCount,
+//                                                            indexType: submesh.indexType,
+//                                                            indexBuffer: submesh.indexBuffer.buffer,
+//                                                            indexBufferOffset: submesh.indexBuffer.offset)
+//                        
+//                    }
+//                    
+//                    renderEncoder.popDebugGroup()
+//                    
+//                    renderEncoder.endEncoding()
+//                    
+//                    if let drawable = view.currentDrawable {
+//                        commandBuffer.present(drawable)
+//                    }
+//                }
+//            }
             
             commandBuffer.commit()
         }
